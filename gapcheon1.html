@@ -93,6 +93,35 @@
   .sms-btn:disabled{opacity:.4; cursor:not-allowed;}
   .order-hint{font-size:11.5px; color:#B9C0D6; text-align:center; margin:10px 0 0; line-height:1.6;}
 
+  .pay-options{display:flex; flex-direction:column; gap:8px;}
+  .pay-option{
+    display:flex; align-items:center; gap:9px; padding:11px 12px; border-radius:8px;
+    border:1px solid rgba(247,241,227,.3); background:rgba(247,241,227,.08); cursor:pointer;
+  }
+  .pay-option input[type="radio"]{width:16px; height:16px; accent-color:var(--gold); margin:0; flex:none;}
+  .pay-option span{font-size:14px; color:var(--paper);}
+  .pay-option.checked{border-color:var(--gold-light); background:rgba(247,241,227,.16);}
+  .pay-etc-input{margin-top:8px; display:none;}
+  .pay-etc-input.show{display:block;}
+  .customer-info textarea{
+    width:100%; box-sizing:border-box; padding:11px 12px; border-radius:8px; border:1px solid rgba(247,241,227,.3);
+    background:rgba(247,241,227,.08); color:var(--paper); font-size:14px; font-family:var(--sans);
+    resize:vertical; min-height:64px;
+  }
+  .customer-info textarea::placeholder{color:#8A93AC;}
+  .customer-info textarea:focus{outline:none; border-color:var(--gold-light); background:rgba(247,241,227,.14);}
+
+  .customer-info{margin:16px 0 4px; padding-top:14px; border-top:1px solid rgba(247,241,227,.18);}
+  .customer-info .ci-label{font-size:12.5px; color:var(--gold-light); font-weight:700; margin-bottom:10px;}
+  .customer-info .ci-field{margin-bottom:10px;}
+  .customer-info label{display:block; font-size:11.5px; color:#C9D0E2; margin-bottom:5px;}
+  .customer-info input{
+    width:100%; box-sizing:border-box; padding:11px 12px; border-radius:8px; border:1px solid rgba(247,241,227,.3);
+    background:rgba(247,241,227,.08); color:var(--paper); font-size:14px; font-family:var(--sans);
+  }
+  .customer-info input::placeholder{color:#8A93AC;}
+  .customer-info input:focus{outline:none; border-color:var(--gold-light); background:rgba(247,241,227,.14);}
+
   .info-list{margin:20px 20px 0; padding:18px 18px 4px; background:var(--white); border:1px solid var(--line); border-radius:16px;}
   .info-row{display:flex; gap:10px; font-size:13px; color:var(--ink-soft); padding-bottom:14px; margin-bottom:0;}
   .info-row .dot{flex:none; color:var(--persimmon); font-weight:700;}
@@ -151,8 +180,8 @@
         <h3>모과쌍화 다과세트</h3>
         <p class="desc">부모님, 어르신들께 선물하기 좋은 고급 전통 다과세트</p>
         <div class="compose-box">
-          구성 · 총 15팩 + 건과류/약과<br>
-          모과쌍화(따우치) 15입 +<br>
+          구성 · 총 15팩 + 견과류/약과<br>
+          모과쌍화(파우치) 15입 +<br>
           찹쌀꿀약과 6입 + 국산 아몬드 바삭대추칩 1입
         </div>
         <div class="price-row">
@@ -182,11 +211,41 @@
       <span class="ol">합계 금액</span>
       <span class="oa" id="order-total">0원</span>
     </div>
+    <div class="customer-info">
+      <div class="ci-label">주문자 정보</div>
+      <div class="ci-field">
+        <label for="ci-name">성함</label>
+        <input type="text" id="ci-name" placeholder="예: 홍길동">
+      </div>
+      <div class="ci-field">
+        <label for="ci-unit">동/호수</label>
+        <input type="text" id="ci-unit" placeholder="예: 101동 1502호">
+      </div>
+      <div class="ci-field">
+        <label for="ci-phone">연락처</label>
+        <input type="tel" id="ci-phone" placeholder="예: 010-1234-5678">
+      </div>
+      <div class="ci-field">
+        <label>결제방법</label>
+        <div class="pay-options">
+          <label class="pay-option"><input type="radio" name="pay-method" value="계좌이체" checked><span>계좌이체</span></label>
+          <label class="pay-option"><input type="radio" name="pay-method" value="현금결제"><span>현금결제</span></label>
+          <label class="pay-option"><input type="radio" name="pay-method" value="기타"><span>기타 (법인카드 결제 등)</span></label>
+        </div>
+        <div class="pay-etc-input" id="payEtcWrap">
+          <input type="text" id="ci-pay-etc" placeholder="기타 결제방법을 적어주세요">
+        </div>
+      </div>
+      <div class="ci-field">
+        <label for="ci-request">배송 및 결제 관련 요청사항</label>
+        <textarea id="ci-request" placeholder="예: 경비실에 맡겨주세요 / 부재 시 연락 부탁드려요 (선택 입력)"></textarea>
+      </div>
+    </div>
     <button class="sms-btn" id="smsBtn" disabled>
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       문자로 주문하기
     </button>
-    <p class="order-hint">문자 앱이 열리면서 주문 내역이 자동으로 채워집니다. 성함·동호수·연락처만 추가로 적어 보내주세요.</p>
+    <p class="order-hint">위 정보 입력 후 버튼을 누르면, 문자 앱에 주문 내역이 자동으로 채워집니다.</p>
   </div>
 
   <div class="info-list">
@@ -267,25 +326,55 @@ document.getElementById('smsBtn').addEventListener('click', ()=>{
   });
   if(lines.length === 0) return;
 
-  const msg = [
+  const name = document.getElementById('ci-name').value.trim();
+  const unit = document.getElementById('ci-unit').value.trim();
+  const phone = document.getElementById('ci-phone').value.trim();
+
+  if(!name || !unit || !phone){
+    alert('성함, 동/호수, 연락처를 모두 입력해 주세요.');
+    return;
+  }
+
+  const payRadio = document.querySelector('input[name="pay-method"]:checked');
+  let payMethod = payRadio ? payRadio.value : '계좌이체';
+  if(payMethod === '기타'){
+    const etc = document.getElementById('ci-pay-etc').value.trim();
+    payMethod = etc ? `기타 (${etc})` : '기타';
+  }
+  const request = document.getElementById('ci-request').value.trim();
+
+  const msgLines = [
     '[베지밀 갑천1 트리풀시티 힐스테이트 특별 할인전 주문]',
     '',
     ...lines,
     '',
     '합계: ' + won(total),
     '',
-    '성함:',
-    '동/호수:',
-    '연락처:',
-    '',
-    '위 내역대로 주문 부탁드립니다. 감사합니다.'
-  ].join('\n');
+    '성함: ' + name,
+    '동/호수: ' + unit,
+    '연락처: ' + phone,
+    '결제방법: ' + payMethod
+  ];
+  if(request){
+    msgLines.push('요청사항: ' + request);
+  }
+  msgLines.push('', '위 내역대로 주문 부탁드립니다. 감사합니다.');
+
+  const msg = msgLines.join('\n');
 
   const body = encodeURIComponent(msg);
   const tel = '01093278870';
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const sep = isIOS ? '&' : '?';
   window.location.href = `sms:${tel}${sep}body=${body}`;
+});
+
+document.addEventListener('change', (e)=>{
+  if(e.target.name === 'pay-method'){
+    document.querySelectorAll('.pay-option').forEach(el=>el.classList.remove('checked'));
+    e.target.closest('.pay-option').classList.add('checked');
+    document.getElementById('payEtcWrap').classList.toggle('show', e.target.value === '기타');
+  }
 });
 
 render();
