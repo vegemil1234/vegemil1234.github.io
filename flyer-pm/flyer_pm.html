@@ -420,7 +420,12 @@ function submitReg(){
   var row={id:V.editId||'',month:MONTH,office:ME.office,submitter:ME.name,agency:f.agency,store:f.store,price:f.price,start:f.start,end:f.end,product:prod,ipsu:f.ipsu||ipsuOf(prod),grade:f.grade,competitor:f.competitor,salesNone:f.salesNone,salesNormal:f.salesNormal,salesFlyer:f.salesFlyer,note:f.note,device:DEV};
   var photos={}; SLOTS.forEach(function(s){ var p=V.ph[s.k]; if(p&&p.dataUrl) photos[s.k]=photoPayload(p); });
   Object.keys(V.phDel||{}).forEach(function(k){ if(!V.ph[k]) photos[k]=null; });
-  enqueue({row:row,photos:photos,label:f.store});
+  var cid=enqueue({row:row,photos:photos,label:f.store});
+  // 서버 저장을 기다리지 않고 등록 현황·시트 입력에 바로 보이게 (저장되면 서버 값으로 바뀜)
+  var prev=(V.rows||[]).filter(function(x){ return x.id===cid; })[0];
+  var loc=Object.assign({},prev||{},row,{id:cid,_pending:true,status:prev?prev.status:'',reason:prev?prev.reason:'',createdAt:prev?prev.createdAt:nowStr(),updatedAt:nowStr(),photos:{}});
+  SLOTS.forEach(function(s){ if(V.ph[s.k]) loc.photos[s.k]=V.ph[s.k]; });
+  upsertRow(loc);
   var ags=ls('fp_ags_'+ME.office,[]); if(ags.indexOf(f.agency)<0){ ags.unshift(f.agency); lss('fp_ags_'+ME.office,ags.slice(0,40)); }
   lss('fp_last',{agency:f.agency});
   var wasEdit=!!V.editId;
@@ -428,6 +433,7 @@ function submitReg(){
   render(); window.scrollTo(0,0);
   showMsg('✅ <b>'+esc(row.store)+'</b> '+(wasEdit?'수정 내용을 보냈어요.':'접수했어요. 보내는 동안 다음 점포를 등록하셔도 됩니다.'),'ok');
 }
+function upsertRow(r){ if(!V.rows) V.rows=[]; var i=V.rows.map(function(x){ return x.id; }).indexOf(r.id); if(i>=0) V.rows[i]=r; else V.rows.push(r); if(!sheetDirty().length) V.sheet=null; }
 function photoPayload(p){ return {imageData:p.dataUrl,sha:p.sha,dhash:p.dhash,exifDate:p.exifDate,lastModified:p.lastModified,origW:p.origW,origH:p.origH,origSize:p.origSize}; }
 function editRow(id){
   var r=(V.rows||[]).filter(function(x){ return x.id===id; })[0]; if(!r) return;
@@ -511,6 +517,7 @@ function enqueue(o){
   o.clientId=o.row.id||('fp'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)+DEV.slice(-3));
   o.at=Date.now(); o.tries=0; o.state='wait';
   qPut(o,function(){ pump(); });
+  return o.clientId;
 }
 var PUMPING=false, QINFO={wait:0,fail:0,err:[]};
 function pump(){
@@ -528,7 +535,7 @@ function pump(){
   });
   function next(){ PUMPING=false; setTimeout(pump,200); }
 }
-function mergeRow(r){ if(!r||!V.rows||r.month!==MONTH) { V.rows=null; return; } var i=V.rows.map(function(x){ return x.id; }).indexOf(r.id); if(i>=0) V.rows[i]=r; else V.rows.push(r); if(V.tab==='list') render(); if(V.tab==='sheet') sheetMerge(r); }
+function mergeRow(r){ if(!r) return; if(r.month!==MONTH){ if(V.rows) V.rows=V.rows.filter(function(x){ return x.id!==r.id; }); return; } if(!V.rows) V.rows=[]; var i=V.rows.map(function(x){ return x.id; }).indexOf(r.id); if(i>=0) V.rows[i]=r; else V.rows.push(r); if(V.tab==='list') render(); if(V.tab==='sheet') sheetMerge(r); }
 function drawQ(){
   var b=$('qbar'); if(!b) return;
   var h='';
@@ -545,14 +552,15 @@ function loadRows(){
   apiGet({action:'fpList',office:of,month:m}).then(function(d){
     if(ME.office!==of||MONTH!==m) return;
     V.rowsErr=d&&d.success?'':(d&&d.msg)||'불러오지 못했어요';
-    V.rows=d&&d.success?d.rows:(V.rows||[]);
+    var pend=(V.rows||[]).filter(function(r){ return r._pending; }); V.rows=d&&d.success?d.rows:(V.rows||[]);
+    pend.forEach(function(r){ if(!V.rows.some(function(x){ return x.id===r.id; })) V.rows.push(r); });
     if(V.tab==='sheet'&&!sheetDirty().length) V.sheet=null;
     if(V.tab!=='reg'||!document.activeElement||!/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) render();
   }).catch(function(){ V.rowsErr='인터넷 연결을 확인해 주세요'; V.rows=V.rows||[]; render(); });
 }
 function phCount(r){ return SLOTS.filter(function(s){ return r.photos&&r.photos[s.k]; }).length; }
 function mustMiss(r){ return SLOTS.filter(function(s){ return s.must&&!(r.photos&&r.photos[s.k]); }); }
-function stBadge(r){ return r.status==='적합'?'<span class="bd ok">✓ 적합</span>':r.status==='부적합'?'<span class="bd no">✕ 부적합</span>':'<span class="bd wait">검토 대기</span>'; }
+function stBadge(r){ if(r._pending) return '<span class="bd wait">📤 전송 중</span>'; return r.status==='적합'?'<span class="bd ok">✓ 적합</span>':r.status==='부적합'?'<span class="bd no">✕ 부적합</span>':'<span class="bd wait">검토 대기</span>'; }
 function viewList(){
   if(V.rows===null) return '<div class="card"><div class="guide">불러오는 중...</div></div>';
   var R=V.rows.slice().sort(function(a,b){ return String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')); });
@@ -587,13 +595,14 @@ var SC=[ // 열: 취합 파일과 같은 순서
 ];
 function sheetInit(){
   if(V.sheet) return;
-  var rows=(V.rows||[]).slice().sort(function(a,b){ return String(a.createdAt||'').localeCompare(String(b.createdAt||'')); }).map(function(r){ var o={id:r.id,status:r.status,reason:r.reason,photos:Object.assign({},r.photos||{}),nph:{},dirty:false}; SC.forEach(function(c){ o[c.k]=r[c.k]==null?'':r[c.k]; }); return o; });
+  var rows=(V.rows||[]).slice().sort(function(a,b){ return String(a.createdAt||'').localeCompare(String(b.createdAt||'')); }).map(sRowFrom);
   for(var i=0;i<(rows.length?5:12);i++) rows.push(blankSRow());
   V.sheet=rows;
 }
+function sRowFrom(r){ var o={id:r.id,status:r.status,reason:r.reason,photos:Object.assign({},r.photos||{}),nph:{},dirty:false,saving:!!r._pending}; SC.forEach(function(c){ o[c.k]=r[c.k]==null?'':r[c.k]; }); return o; }
 function blankSRow(){ var o={id:'',status:'',photos:{},nph:{},dirty:false}; SC.forEach(function(c){ o[c.k]=c.k==='grade'?'':''; }); return o; }
 function sheetDirty(){ return (V.sheet||[]).filter(function(r){ return r.dirty; }); }
-function sheetMerge(r){ if(!V.sheet) return; var s=V.sheet.filter(function(x){ return x.id===r.id||x._cid===r.id; })[0]; if(s){ s.id=r.id; s.status=r.status; s.photos=Object.assign({},r.photos||{}); s.nph={}; s.saving=false; } drawSheetBody(); }
+function sheetMerge(r){ if(!V.sheet) return; var s=V.sheet.filter(function(x){ return x.id===r.id||x._cid===r.id; })[0]; if(s){ s.id=r.id; s.status=r.status; s.photos=Object.assign({},r.photos||{}); s.nph={}; s.saving=false; drawSheetBody(); } else if(!sheetDirty().length){ V.sheet=null; render(); } else { var o=sRowFrom(r), k=V.sheet.length; while(k>0&&!V.sheet[k-1].id&&!V.sheet[k-1].dirty) k--; V.sheet.splice(k,0,o); drawSheetBody(); } }
 function viewSheet(){
   if(V.rows===null) return '<div class="card"><div class="guide">불러오는 중...</div></div>';
   sheetInit();
