@@ -183,6 +183,7 @@ function demoPost(b){
   var rows=demoRows()||[];
   if(b.action==='fpJudge'){ var ids=b.ids||[b.id]; rows.forEach(function(r){ if(ids.indexOf(r.id)>=0){ r.status=b.status||''; r.reason=b.status==='부적합'?(b.reason||''):''; r.judgedBy=b.user; r.judgedAt=b.status?nowStr():''; } }); lss('fp_demo_rows',rows); return {success:true}; }
   if(b.action==='fpCfgSet'){ lss('fp_demo_cfg',b.cfg); return {success:true,cfg:b.cfg}; }
+  if(b.action==='fpDel'){ lss('fp_demo_rows',rows.filter(function(x){ return x.id!==b.id; })); return {success:true}; }
   if(b.action==='fpImport'){ (b.rows||[]).forEach(function(r){ var o=rows.filter(function(x){ return x.id===r.id; })[0]; if(!o){ o={id:r.id,photos:{},createdAt:nowStr()}; rows.push(o); } Object.keys(r).forEach(function(k){ o[k]=r[k]; }); o.updatedAt=nowStr(); }); if(!lss('fp_demo_rows',rows)) return {success:false,msg:'데모 저장 공간 부족'}; return {success:true,n:(b.rows||[]).length}; }
   if(b.action==='fpSave'){ var o=rows.filter(function(x){ return x.id===b.row.id; })[0]; if(!o) return {success:false,msg:'없는 건'}; Object.keys(b.photos||{}).forEach(function(k){ var p=b.photos[k]; o.photos[k]={fileId:'local',src:p.imageData,sha:p.sha,dhash:p.dhash,exif:p.exifDate,at:nowStr()}; }); if(!lss('fp_demo_rows',rows)) return {success:false,msg:'데모 저장 공간 부족 (데모에선 사진 일부만 넣어 보세요)'}; return {success:true,row:o}; }
   return {success:false};
@@ -512,7 +513,7 @@ function demoReset(){ if(!confirm('데모 데이터를 지우고 예시 데이�
 // 엑셀: 전단프로모션 취합 파일 형식(영업소별 시트: No., 대리점명, 점포명, 행사가격, 행사시작일, 행사종료일, 품목명, 입수, 점포등급, 타사행사내역, 부적합 사유, 판매량 3열)
 // 사진: 파일 이름 '2026-10_동부_3_앞면.jpg' (행사월_영업소_No_행사/앞면/뒷면/확대) — 폴더째 선택
 var IMP=null, SLOTW={'행사':'event','앞면':'front','앞':'front','뒷면':'back','뒤':'back','확대':'zoom','확대컷':'zoom'};
-function openImp(){ if(!DEMO&&!KEY){ askKey(); return; } IMP=IMP||{month:S.month<CHECK_FROM?S.month:'',rows:[],files:{},bad:[],log:''}; drawImp(); $('mdl').classList.add('on'); }
+function openImp(){ if(!DEMO&&!KEY){ askKey(); return; } if(IMP&&IMP.done&&!IMP.busy) IMP=null; IMP=IMP||{month:S.month<CHECK_FROM?S.month:'',rows:[],files:{},bad:[],log:''}; drawImp(); $('mdl').classList.add('on'); }
 function drawImp(){
   var I=IMP, BO={}; I.rows.forEach(function(r){ (BO[r.office]=BO[r.office]||[]).push(r); });
   var nph=0; Object.keys(I.files).forEach(function(id){ nph+=Object.keys(I.files[id]).length; });
@@ -542,7 +543,9 @@ function impXlsx(f){
     var wb=XLSX.read(fr.result,{type:'array'}), t='';
     ['합계','취합현황'].forEach(function(n){ var sh=wb.Sheets[n]; if(sh) ['A1','B1','C1'].forEach(function(a){ if(sh[a]) t+=' '+sh[a].v; }); });
     var mm=(t+' '+f.name).match(/(20\d\d)\s*년\s*(\d{1,2})\s*월/)||(f.name).match(/\((\d{1,2})월\)/)||(f.name).match(/(\d{1,2})월/);
-    if(!IMP.month&&mm) IMP.month=mm.length>2?mm[1]+'-'+('0'+mm[2]).slice(-2):PERIOD[0].slice(0,4)+'-'+('0'+mm[1]).slice(-2);
+    var fm=mm?(mm.length>2?mm[1]+'-'+('0'+mm[2]).slice(-2):PERIOD[0].slice(0,4)+'-'+('0'+mm[1]).slice(-2)):'';
+    if(fm) IMP.month=fm;   // 엑셀에 적힌 달이 항상 우선 (이전에 고른 달을 그대로 쓰지 않음)
+    IMP.files={}; IMP.bad=[]; IMP.log=''; IMP.done=false;
     if(!IMP.month){ alert('행사월을 찾지 못했어요. 위에서 행사월을 골라 주세요.'); }
     var rows=[];
     OFFICES.forEach(function(of){
@@ -595,10 +598,20 @@ function impRun(){
     var part=rows.slice(k,k+80); log('⏳ 데이터 '+k+'/'+rows.length+'건 저장 중...');
     apiPost({action:'fpImport',rows:part}).then(function(d){ if(!d||!d.success){ I.busy=false; log('⚠ '+((d&&d.msg)||'저장 실패')); return; } k+=part.length; chunk(); }).catch(function(){ I.busy=false; log('⚠ 인터넷 연결 확인 후 다시 눌러 주세요 (덮어쓰기라 다시 해도 괜찮아요)'); });
   })();
-  function photos(){
+  function photos(){ cleanup(function(){ photos2(); }); }
+  function cleanup(next){
+    var keep={}; rows.forEach(function(r){ keep[r.id]=1; }); var pre='im'+I.month.replace('-','')+'-';
+    apiGet({action:'fpAll',month:I.month,key:KEY}).then(function(d){
+      var old=((d&&d.rows)||[]).filter(function(r){ return String(r.id).indexOf(pre)===0&&!keep[r.id]; }), q=0;
+      if(!old.length) return next();
+      (function del(){ if(q>=old.length) return next(); log('🧹 엑셀에 없는 예전 이관 건 정리 '+(q+1)+'/'+old.length+'...');
+        apiPost({action:'fpDel',id:old[q].id,office:old[q].office}).then(function(){ q++; del(); }).catch(function(){ q++; del(); }); })();
+    }).catch(function(){ next(); });
+  }
+  function photos2(){
     var ids=Object.keys(I.files), j=0, fail=[];
     (function one(){
-      if(j>=ids.length){ I.busy=false; log('✅ 완료 — '+rows.length+'건'+(ids.length?' · 사진 '+(ids.length-fail.length)+'건':'')+(fail.length?' · <span style="color:var(--red)">사진 실패 '+fail.length+'건 (다시 누르면 재시도)</span>':'')); I.files=fail.reduce(function(o,id){ o[id]=I.files[id]; return o; },{}); if(S.month!==I.month) setMonth(I.month); else load(); return; }
+      if(j>=ids.length){ I.busy=false; I.done=true; log('✅ 완료 — '+rows.length+'건'+(ids.length?' · 사진 '+(ids.length-fail.length)+'건':'')+(fail.length?' · <span style="color:var(--red)">사진 실패 '+fail.length+'건 (다시 누르면 재시도)</span>':'')); I.files=fail.reduce(function(o,id){ o[id]=I.files[id]; return o; },{}); if(S.month!==I.month) setMonth(I.month); else load(); return; }
       var id=ids[j], row=rows.filter(function(r){ return r.id===id; })[0], F=I.files[id], ks=Object.keys(F), ph={}, left=ks.length;
       log('⏳ 사진 '+(j+1)+'/'+ids.length+'건 올리는 중... ('+esc(row.office+' '+row.store)+')');
       ks.forEach(function(s){ prepImg(F[s],function(p){ if(p) ph[s]=p; if(--left===0) send(); }); });
