@@ -535,7 +535,7 @@ function drawImp(){
 function impId(m,of,no){ return 'im'+m.replace('-','')+'-'+of+'-'+no; }
 function impReid(){ if(!IMP.month) return; IMP.rows.forEach(function(r){ r.month=IMP.month; r.id=impId(IMP.month,r.office,r._no); }); }
 function xd(v){ if(typeof v==='number'&&v>20000) return new Date(Date.UTC(1899,11,30)+Math.round(v)*864e5).toISOString().slice(0,10); var s=String(v||'').trim(), m;
-  if((m=s.match(/^(\d{4})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})/))) return m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2); if((m=s.match(/^(\d{1,2})[.\-\/](\d{1,2})$/))&&IMP.month) return IMP.month.slice(0,4)+'-'+('0'+m[1]).slice(-2)+'-'+('0'+m[2]).slice(-2); return s; }
+  if((m=s.match(/^(\d{4})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})/))) return m[1]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[3]).slice(-2); if((m=s.match(/^(\d{1,2})\s*[.\-\/월]\s*(\d{1,2})\s*일?$/))&&IMP.month) return IMP.month.slice(0,4)+'-'+('0'+m[1]).slice(-2)+'-'+('0'+m[2]).slice(-2); return s; }
 function impXlsx(f){
   if(!f) return; var fr=new FileReader();
   fr.onload=function(){
@@ -552,13 +552,14 @@ function impXlsx(f){
       if(hi<0) return;
       var H=A[hi].map(function(c,j){ var up=hi>0?String(A[hi-1][j]||''):''; return (String(c)+(/^=|^\d/.test(String(c))||!String(c)?'|'+up:'')).replace(/\s/g,''); }),   // 판매량 머리글이 한 줄 위에 있는 형식도 읽음
        col=function(k){ for(var i=0;i<H.length;i++) if(H[i].indexOf(k)>=0) return i; return -1; };
-      var C={no:col('No'),agency:col('대리점명'),store:col('점포명'),price:col('행사가격'),start:col('행사시작일'),end:col('행사종료일'),product:col('품목명'),ipsu:col('입수'),grade:col('점포등급'),competitor:col('타사행사'),reason:col('부적합사유'),sN:col('미행사시'),sR:col('일반행사시'),sF:col('전단기간'),status:col('판정')};
+      var C={no:col('No'),agency:col('대리점명'),store:col('점포명'),price:col('행사가격'),start:col('행사시작일'),end:col('행사종료일'),product:col('품목명'),ipsu:col('입수'),grade:col('점포등급'),competitor:col('타사행사'),reason:col('부적합사유'),sN:col('미행사시'),sR:col('일반행사시'),sF:col('전단기간'),status:col('판정'),note:col('비고')};
       if(C.reason<0&&C.competitor>=0) C.reason=C.competitor+1;   // '부적합 사유' 머리글이 비어 있는 시트(예: 서부)
       var g=function(r,k){ return C[k]<0?'':r[C[k]]; }, seq=0;
       for(var i=hi+1;i<A.length;i++){
         var r=A[i], store=String(g(r,'store')).trim(); if(!store||/^합계/.test(String(g(r,'agency')))) continue; seq++;
         var no=parseInt(g(r,'no'),10)||seq, rs=g(r,'reason'), note='', status='적합', reason='';
         if(typeof rs==='number'){ note='사진가격 '+rs.toLocaleString('ko-KR'); } else if(/^\s*↑/.test(String(rs))){ note=String(rs).trim(); } else if(String(rs).trim()){ status='부적합'; reason=String(rs).trim(); }
+        var nt=String(g(r,'note')).trim(); if(nt) note=note?note+' / '+nt:nt;
         var sv=String(g(r,'status')).trim(); if(sv==='적합'||sv==='부적합') status=sv; else if(sv==='대기'){ status=''; }
         var sn=function(k){ var v=g(r,k); return v===''?'':n0(v); };
         rows.push({_no:no,office:of,agency:String(g(r,'agency')).trim(),store:store,price:n0(g(r,'price'))||'',start:xd(g(r,'start')),end:xd(g(r,'end')),product:String(g(r,'product')).trim(),ipsu:n0(g(r,'ipsu'))||'',grade:String(g(r,'grade')).trim(),competitor:String(g(r,'competitor')).trim(),
@@ -568,7 +569,7 @@ function impXlsx(f){
     IMP.ap={};   // 합계 시트의 '인정개수' (영업소별) — 가져온 적합 수와 비교용
     var hs=wb.Sheets['합계']; if(hs){ var A2=XLSX.utils.sheet_to_json(hs,{header:1,raw:true,defval:''}), apc=-1, apr=-1;
       A2.some(function(r,i){ for(var c=0;c<r.length;c++) if(String(r[c]).replace(/\s/g,'')==='인정개수'){ apc=c; apr=i; return true; } });
-      if(apc>=0) A2.forEach(function(r,i){ if(i<=apr) return; var of=String(r[1]||r[0]).trim(); if(OFFICES.indexOf(of)>=0&&r[apc]!==''&&!isNaN(+r[apc])) IMP.ap[of]=+r[apc]; }); }
+      if(apc>=0) A2.forEach(function(r,i){ if(i<=apr) return; var of=OFFICES.indexOf(String(r[1]).trim())>=0?String(r[1]).trim():String(r[0]).trim(); if(OFFICES.indexOf(of)>=0&&r[apc]!==''&&!isNaN(+r[apc])) IMP.ap[of]=+r[apc]; }); }
     IMP.rows=rows; impReid(); drawImp();
   };
   fr.readAsArrayBuffer(f);
