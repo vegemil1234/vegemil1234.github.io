@@ -255,7 +255,7 @@ function analyze(){
   P.forEach(function(r){ var k=r.office+'|'+norm(r.store); (prevStore[k]=prevStore[k]||[]).push(r); });
   R.forEach(function(r){
     var W=[], ph=r.photos||{};
-    var mm=SLOTS.filter(function(s){ return s.must&&!ph[s.k]; }); if(mm.length) W.push({t:'err',m:'사진 없음: '+mm.map(function(s){ return s.l; }).join('·'),rs:'사진 없음·부족',flag:mm.map(function(s){ return s.k; })});
+    var mm=mustSlots(r).filter(function(s){ return !ph[s.k]; }); if(mm.length) W.push({t:'err',m:'사진 없음: '+mm.map(function(s){ return s.l; }).join('·'),rs:'사진 없음·부족',flag:mm.map(function(s){ return s.k; })});
     if(!ph.back) W.push({t:'info',m:'전단 뒷면 없음'});
     SLOTS.forEach(function(s){ var p=ph[s.k]; if(!p) return;
       if(p.sha&&sha[p.sha].length>1){ var o=sha[p.sha].filter(function(x){ return !(x.r===r&&x.s===s); })[0]; W.push({t:'err',m:s.l+' — 같은 사진이 '+(o.r===r?'이 건 '+o.s.l:(o.r.month!==r.month?(+o.r.month.slice(5))+'월 PM ':'')+esc(o.r.office)+' '+esc(o.r.store)+' '+o.s.l)+'에도 있음',rs:'중복 사진',flag:[s.k]}); }
@@ -279,9 +279,11 @@ function analyze(){
 }
 
 // ═════════ 집계 ═════════
+function mustSlots(r){ return String(r.month||'')<CHECK_FROM?SLOTS.filter(function(s){ return s.k==='event'; }):SLOTS.filter(function(s){ return s.must; }); }   // 이관 달은 행사사진만 필수
+function sv(v){ if(v===''||v==null) return '-'; var n=parseFloat(v); return isFinite(n)?(Math.round(n*10)/10).toLocaleString('ko-KR'):esc(v); }   // 판매량: 소수 첫째 자리까지
 function agg(rows){
   var o={n:rows.length,ok:0,no:0,wait:0,phx:0,g:{SA:0,A:0,B:0,C:0},sN:0,sR:0,sF:0};
-  rows.forEach(function(r){ if(r.status==='적합') o.ok++; else if(r.status==='부적합') o.no++; else o.wait++; if(SLOTS.some(function(s){ return s.must&&!(r.photos&&r.photos[s.k]); })) o.phx++; if(o.g[r.grade]!=null) o.g[r.grade]++; o.sN+=n0(r.salesNone); o.sR+=n0(r.salesNormal); o.sF+=n0(r.salesFlyer); });
+  rows.forEach(function(r){ if(r.status==='적합') o.ok++; else if(r.status==='부적합') o.no++; else o.wait++; if(mustSlots(r).some(function(s){ return !(r.photos&&r.photos[s.k]); })) o.phx++; if(o.g[r.grade]!=null) o.g[r.grade]++; o.sN+=n0(r.salesNone); o.sR+=n0(r.salesNormal); o.sF+=n0(r.salesFlyer); });
   o.box=o.ok*n0(CFG.pmBox); o.amt=o.box*n0(CFG.boxUnit)*n0(CFG.boxIpsu); return o;
 }
 function byOffice(){ var m={}; OFFICES.forEach(function(o){ m[o]=[]; }); (S.rows||[]).forEach(function(r){ (m[r.office]=m[r.office]||[]).push(r); }); return m; }
@@ -308,7 +310,7 @@ function render(){
     '<th>SA</th><th>A</th><th>B</th><th>C</th><th>소계</th><th>적합</th><th>부적합</th><th>대기</th><th>사진부족</th><th>미행사시</th><th>일반행사시</th><th>전단기간</th><th>미진행 대비</th><th>일반행사 대비</th><th>박스</th><th>금액(원)</th></tr></thead><tbody>';
   var row=function(name,o,cls,click){ var z=function(v){ return v?v:'<span class="z">0</span>'; };
     return '<tr class="'+(cls||'')+'"'+(click?' onclick="S.office=S.office===\''+name+'\'?\'\':\''+name+'\';render()"':'')+'><td>'+name+'</td>'+GRADES.map(function(g){ return '<td>'+z(o.g[g])+'</td>'; }).join('')+'<td><b>'+z(o.n)+'</b></td><td style="color:var(--ok);font-weight:800">'+z(o.ok)+'</td><td style="color:var(--red)">'+z(o.no)+'</td><td style="color:var(--wait)">'+z(o.wait)+'</td><td>'+z(o.phx)+'</td>'+
-      '<td>'+z(o.sN)+'</td><td>'+z(o.sR)+'</td><td>'+z(o.sF)+'</td><td class="pct">'+pctTxt(o.sF,o.sN)+'</td><td class="pct">'+pctTxt(o.sF,o.sR)+'</td><td><b>'+z(o.box)+'</b></td><td>'+(won(o.amt)||'<span class="z">0</span>')+'</td></tr>'; };
+      '<td>'+(o.sN?sv(o.sN):z(0))+'</td><td>'+(o.sR?sv(o.sR):z(0))+'</td><td>'+(o.sF?sv(o.sF):z(0))+'</td><td class="pct">'+pctTxt(o.sF,o.sN)+'</td><td class="pct">'+pctTxt(o.sF,o.sR)+'</td><td><b>'+z(o.box)+'</b></td><td>'+(won(o.amt)||'<span class="z">0</span>')+'</td></tr>'; };
   h+=row('합계',T,'tot',false);
   OFFICES.forEach(function(o){ h+=row(o,agg(BO[o]),S.office===o?'on':'',true); });
   h+='</tbody></table></div></div>';
@@ -332,9 +334,9 @@ function cardHtml(r,i){
   var ph=r.photos||{}, flag={}; (r._w||[]).forEach(function(w){ (w.flag||[]).forEach(function(k){ flag[k]=1; }); });
   var h='<div class="rc '+(r.status==='적합'?'s-ok':r.status==='부적합'?'s-no':'')+'" id="rc-'+r.id+'"><div class="hd"><div style="min-width:0"><div class="nm">'+esc(r.store)+' <span class="sub">'+esc(r.grade||'')+'</span></div><div class="sub">'+esc(r.office)+' · '+esc(r.agency)+' · '+esc(r.submitter||'')+'</div></div><div class="r"><div class="pr">'+won(r.price)+'원</div>'+stBadge(r)+'</div></div>';
   h+='<div class="ph4">'+SLOTS.map(function(s){ var p=ph[s.k];
-    if(!p) return '<div class="p x'+(s.must?' must':'')+'">'+(s.must?'⚠ ':'')+s.l+'<span style="font-weight:500">없음</span></div>';
+    var mu=mustSlots(r).indexOf(s)>=0; if(!p) return '<div class="p x'+(mu?' must':'')+'">'+(mu?'⚠ ':'')+s.l+'<span style="font-weight:500">없음</span></div>';
     return '<div class="p" onclick="openLb('+i+',\''+s.k+'\')"><img loading="lazy" src="'+esc(photoSrc(p,400))+'" alt="">'+(flag[s.k]?'<span class="fl">확인</span>':'')+'<div class="lb">'+s.l+'</div></div>'; }).join('')+'</div>';
-  h+='<div class="kv"><span>품목</span><b style="grid-column:span 3">'+esc(r.product)+' <span style="font-weight:500;color:var(--tx2)">('+esc(r.ipsu||'-')+'입)</span></b><span>기간</span><b>'+md(r.start)+' ~ '+md(r.end)+'</b><span>판매량</span><b>'+[r.salesNone,r.salesNormal,r.salesFlyer].map(function(v){ return v===''||v==null?'-':v; }).join(' / ')+'</b>'+
+  h+='<div class="kv"><span>품목</span><b style="grid-column:span 3">'+esc(r.product)+' <span style="font-weight:500;color:var(--tx2)">('+esc(r.ipsu||'-')+'입)</span></b><span>기간</span><b>'+md(r.start)+' ~ '+md(r.end)+'</b><span>판매량</span><b>'+[r.salesNone,r.salesNormal,r.salesFlyer].map(sv).join(' / ')+'</b>'+
     (r.competitor?'<span>타사</span><b style="grid-column:span 3;font-weight:600">'+esc(r.competitor)+'</b>':'')+(r.note?'<span>비고</span><b style="grid-column:span 3;font-weight:600">'+esc(r.note)+'</b>':'')+'</div>';
   if(r._w&&r._w.length) h+='<div class="ws">'+r._w.map(function(w){ return '<div class="w '+w.t+'">'+(w.t==='err'?'⛔ ':w.t==='warn'?'⚠ ':'ⓘ ')+w.m+'</div>'; }).join('')+'</div>';
   if(r.status==='부적합'&&r.reason) h+='<div class="w err">부적합 사유: '+esc(r.reason)+'</div>';
@@ -383,7 +385,7 @@ function drawLb(){
     '<button class="nav l" onclick="lbMove(-1)">‹</button><button class="nav r" onclick="lbMove(1)">›</button><button class="cls" onclick="closeLb()">✕</button></div>';
   h+='<div class="side"><div style="font-size:12px;color:#94a3b8">'+(S.lb.i+1)+' / '+S._L.length+' · '+esc(r.office)+'영업소</div><div class="nm">'+esc(r.store)+' <span style="font-size:13px;color:#94a3b8">'+esc(r.grade||'')+'</span></div>'+
     '<div style="font-size:24px;font-weight:900;color:#fb923c">'+won(r.price)+'원</div>'+
-    '<div class="kv" style="grid-template-columns:auto 1fr"><span>대리점</span><b>'+esc(r.agency)+'</b><span>품목</span><b>'+esc(r.product)+' ('+esc(r.ipsu||'-')+'입)</b><span>기간</span><b>'+esc(r.start)+' ~ '+esc(r.end)+'</b><span>타사</span><b>'+esc(r.competitor||'-')+'</b><span>판매량</span><b>미행사 '+esc(r.salesNone||'-')+' · 일반 '+esc(r.salesNormal||'-')+' · 전단 '+esc(r.salesFlyer||'-')+'</b><span>등록</span><b>'+esc(r.submitter||'')+'</b>'+(p&&p.exif?'<span>촬영일</span><b>'+esc(p.exif)+'</b>':'')+'</div>'+
+    '<div class="kv" style="grid-template-columns:auto 1fr"><span>대리점</span><b>'+esc(r.agency)+'</b><span>품목</span><b>'+esc(r.product)+' ('+esc(r.ipsu||'-')+'입)</b><span>기간</span><b>'+esc(r.start)+' ~ '+esc(r.end)+'</b><span>타사</span><b>'+esc(r.competitor||'-')+'</b><span>판매량</span><b>미행사 '+sv(r.salesNone)+' · 일반 '+sv(r.salesNormal)+' · 전단 '+sv(r.salesFlyer)+'</b><span>등록</span><b>'+esc(r.submitter||'')+'</b>'+(p&&p.exif?'<span>촬영일</span><b>'+esc(p.exif)+'</b>':'')+'</div>'+
     ((r._w||[]).length?'<div class="ws">'+r._w.map(function(w){ return '<div class="w '+w.t+'">'+w.m+'</div>'; }).join('')+'</div>':'<div class="w" style="background:#14532d;color:#bbf7d0">자동 점검 경고 없음</div>')+
     '<div>'+stBadge(r)+(r.status==='부적합'?' <span style="font-size:12.5px;color:#fca5a5">'+esc(r.reason)+'</span>':'')+'</div>'+
     (S.rsn===r.id?rsnHtml(r):'<div style="display:flex;gap:8px"><button class="btn ok" style="flex:1;padding:12px;font-size:15px" onclick="judge(\''+r.id+'\',\'적합\')">✓ 적합 <small>(1)</small></button><button class="btn no" style="flex:1;padding:12px;font-size:15px" onclick="openRsn(\''+r.id+'\')">✕ 부적합 <small>(2)</small></button></div>')+
