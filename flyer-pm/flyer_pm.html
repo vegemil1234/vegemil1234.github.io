@@ -150,7 +150,7 @@ var CFG = {products:[
   {n:'검은참깨(미드)190-24G',i:24},{n:'검은참깨고칼슘(미드)190-24G',i:24},{n:'검은콩&16곡(미드)190-24',i:24},{n:'검은콩16곡(파)190-15G',i:15},
   {n:'검은콩두유고칼슘(파)190-15G',i:15},{n:'검은콩아몬드&호두(미드)190-24',i:24},{n:'검은콩아몬드와호두(파)190-15G',i:15},{n:'검은콩저당두유(미드)190-24',i:24},
   {n:'고소한베지밀(파)190-15G',i:15},{n:'달콤한B(미드)190-64G',i:16},{n:'담백한A(미드)190-64G',i:16},{n:'뼈에좋은검은콩(미드)190-24G',i:24},{n:'플레인고칼슘두유(미드)190-24G',i:24}],
-  notice:''};
+  notice:'', priceMin:1000, priceMax24:15900, priceMax16:9900};
 var DEMO = !GAS_URL;
 var INPUT_FROM = '2026-11', INPUT_TO = '2026-12';   // 영업소가 입력할 수 있는 행사월 (4~10월은 영업지원팀이 이관)
 function inputMonths(){ var L=[ym(-1),ym(),ym(1)].filter(function(m){ return m>=INPUT_FROM&&m<=INPUT_TO; }); return L.length?L:[ym()]; }
@@ -181,6 +181,8 @@ function normDate(v,month){   // '2026.10.9' '10/9' '10-09' '20261009' → YYYY-
   if(/^\d{5}$/.test(s)){ var t=new Date(Date.UTC(1899,11,30)+(+s)*864e5); return t.toISOString().slice(0,10); }   // 엑셀 날짜 숫자
   return s;
 }
+function priceRule(ip){ ip=+ip; var mx=ip>=20?CFG.priceMax24:(ip===15||ip===16)?CFG.priceMax16:0; return mx?{min:+CFG.priceMin||0,max:+mx,lab:(ip>=20?'24입':ip+'입')}:null; }
+function priceIssue(price,ip){ var r=priceRule(ip), n=+price; if(!r||!n) return ''; if(n<r.min||n>r.max) return r.lab+' 행사가격은 '+won(r.min)+'~'+won(r.max)+'원까지 인정돼요 (입력 '+won(n)+'원)'; return ''; }
 function ipsuOf(p){ p=String(p||''); var f=CFG.products.filter(function(x){ return p.indexOf(x.n)===0; })[0]; if(f) return f.i; var m=p.match(/-(\d{2})G?\b/); if(m){ var n=+m[1]; return n===64?16:n; } return ''; }
 var DEV=ls('fp_dev',''); if(!DEV){ DEV='d'+Math.random().toString(36).slice(2,10); lss('fp_dev',DEV); }
 
@@ -209,7 +211,7 @@ function demoPost(b){
     if(cur&&cur.status==='적합') return {success:false,msg:'이미 적합 판정된 건은 고칠 수 없습니다. 영업지원팀에 문의해 주세요'};
     var o=cur||{id:b.clientId||('fp'+Date.now().toString(36)),createdAt:nowStr(),photos:{},status:'',reason:''};
     Object.keys(r).forEach(function(k){ if(k!=='id') o[k]=r[k]; });
-    Object.keys(b.photos||{}).forEach(function(s){ var p=b.photos[s]; if(p===null) delete o.photos[s]; else o.photos[s]={fileId:'local',src:p.imageData,sha:p.sha,dhash:p.dhash,exif:p.exifDate,lm:p.lastModified,at:nowStr()}; });
+    Object.keys(b.photos||{}).forEach(function(s){ var p=b.photos[s]; if(p===null) delete o.photos[s]; else o.photos[s]={fileId:'local',src:p.imageData,sha:p.sha,dhash:p.dhash,exif:p.exifDate,lm:p.lastModified,mk:p.make,md:p.model,sw:p.software,ai:p.ai,ed:p.ed,sc:1,at:nowStr()}; });
     if(cur&&cur.status==='부적합'){ o.status=''; o.reason='(수정됨) '+(cur.reason||''); }
     o.updatedAt=nowStr(); if(!cur) rows.push(o);
     try{ demoSave(rows); }catch(e){ return {success:false,msg:e.message}; }
@@ -329,12 +331,12 @@ function viewReg(){
   h+='<div class="card"><div class="fld"><div class="lab">품목명 <span class="req">*</span></div>'+
     (f._custom?'<input id="r-product" class="inp" placeholder="품목명 직접 입력" value="'+esc(String(f.product).replace(/ 외 \d+종$/,''))+'">':'<select id="r-product" class="inp">'+prodOpts(f.product)+'</select>')+
     '<div class="chips" style="align-items:center"><span style="font-size:14px;color:var(--tx2)">함께 행사한 품목</span>'+[0,1,2,3].map(function(n){ return '<button class="chip" style="'+(+f.extra===n?'border-color:var(--n);color:var(--n);font-weight:800;background:#eef4fa':'')+'" onclick="V.f.extra='+n+';render()">'+(n?'외 '+n+'종':'없음')+'</button>'; }).join('')+'</div></div>'+
-    '<div class="fld row2"><div><div class="lab">행사가격 <span class="req">*</span></div><input id="r-price" class="inp" inputmode="numeric" placeholder="9,900" value="'+esc(won(f.price))+'"></div><div><div class="lab">입수</div><input id="r-ipsu" class="inp" inputmode="numeric" placeholder="자동" value="'+esc(f.ipsu)+'"></div></div>'+
+    '<div class="fld row2"><div><div class="lab">행사가격 <span class="req">*</span> <small>24입 ~'+won(CFG.priceMax24)+' · 15·16입 ~'+won(CFG.priceMax16)+'원</small></div><input id="r-price" class="inp" inputmode="numeric" placeholder="9,900" value="'+esc(won(f.price))+'"></div><div><div class="lab">입수</div><input id="r-ipsu" class="inp" inputmode="numeric" placeholder="자동" value="'+esc(f.ipsu)+'"></div></div>'+
     '<div class="fld"><div class="lab">행사기간 <span class="req">*</span></div><div class="row2"><input id="r-start" type="date" class="inp" value="'+esc(f.start)+'"><input id="r-end" type="date" class="inp" value="'+esc(f.end)+'"></div>'+
     '<div class="chips"><span style="font-size:14px;color:var(--tx2);align-self:center">종료일 빠르게</span>'+[[3,'4일'],[6,'1주'],[13,'2주']].map(function(x){ return '<button class="chip" onclick="quickEnd('+x[0]+')">'+x[1]+'</button>'; }).join('')+'</div><div id="per-hint">'+perHint()+'</div></div>'+
     '<div class="fld"><div class="lab">타사행사내역 <small>없으면 비워 두세요</small></div><input id="r-comp" class="inp" placeholder="예: 삼육 검은콩고칼슘 9,900원" value="'+esc(f.competitor)+'"></div></div>';
   h+='<div class="card"><div class="lab">사진 <small>항목마다 1장 · <span style="color:var(--ac)">필수</span>는 꼭 넣어 주세요</small></div><div class="dropall" id="dropall">🖱 PC에서는 사진을 <b>각 칸에 끌어다 놓거나</b>, 여기에 <b>여러 장을 한꺼번에</b> 놓으면 빈 칸에 순서대로 들어가요</div><div class="slots">'+SLOTS.map(slotHtml).join('')+'</div>'+
-    '<div class="guide" style="margin-top:8px">사진은 나중에 <b>등록 현황 → 수정</b>에서 추가해도 됩니다.</div></div>';
+    '<div class="msg warn" style="display:block;margin-top:10px;font-size:13.5px;padding:8px 12px">⛔ <b>부적합 사진:</b> 행사 시작일 전에 찍은 행사사진 · 지난 사진을 다시 쓰거나 편집한 사진 · AI로 만든 이미지</div><div class="guide" style="margin-top:8px">사진은 나중에 <b>등록 현황 → 수정</b>에서 추가해도 됩니다.</div></div>';
   h+='<div class="card"><div class="lab">평균 판매량 <small>박스 · 행사 끝난 뒤 넣어도 됩니다</small></div><div class="row3">'+
     [['salesNone','미행사시'],['salesNormal','일반행사시'],['salesFlyer','전단기간']].map(function(x){ return '<div><div style="font-size:13px;color:var(--tx2);font-weight:700">'+x[1]+'</div><input id="r-'+x[0]+'" class="inp" inputmode="decimal" value="'+esc(f[x[0]])+'"></div>'; }).join('')+'</div>'+
     '<div class="fld" style="margin-top:12px"><div class="lab">비고</div><input id="r-note" class="inp" placeholder="전달할 내용" value="'+esc(f.note)+'"></div></div>';
@@ -346,8 +348,9 @@ function slotHtml(s){
   var h='<div class="slot'+(p?' has':'')+'" data-slot="'+s.k+'"><div class="t">'+(p?'✅':'📷')+' '+s.l+(s.must?'<span class="must">필수</span>':'')+'</div>';
   if(p){
     h+='<div class="im"><img src="'+esc(photoSrc(p,400))+'" alt=""><button class="x" onclick="rmPhoto(\''+s.k+'\')" aria-label="삭제">×</button></div>';
-    if(p.warn) h+='<div class="warn">⚠ '+esc(p.warn)+'</div>';
+    if(p.warn) h+='<div class="warn">'+(/^⛔/.test(p.warn)?'':'⚠ ')+esc(p.warn)+'</div>';
     var dt=p.exifDate||p.exif||''; if(dt) h+='<div class="meta">촬영 '+esc(dt)+'</div>';
+    if(s.k==='event'&&dt&&V.f.start&&dt.slice(0,10)<V.f.start) h+='<div class="warn">⛔ 행사 시작('+md(V.f.start)+') 전에 찍은 사진 — 부적합</div>';
     h+='<div class="btns"><button onclick="pickPhoto(\''+s.k+'\',1)">📷 다시</button><button onclick="pickPhoto(\''+s.k+'\',0)">🖼 교체</button></div>';
   } else {
     h+='<div class="d">'+s.d+'</div><div class="btns"><button class="cam" onclick="pickPhoto(\''+s.k+'\',1)">📷 찍기</button><button onclick="pickPhoto(\''+s.k+'\',0)">🖼 앨범</button></div>';
@@ -355,7 +358,7 @@ function slotHtml(s){
   return h+'</div>';
 }
 var PICK=null;   // {slot, done(p)}
-function pickPhoto(slot,cam){ PICK={slot:slot,done:function(p){ V.ph[slot]=p; V.confirmMiss=false; render(); }}; var el=$(cam?'f-cam':'f-alb'); el.value=''; el.click(); }
+function pickPhoto(slot,cam){ syncForm(); PICK={slot:slot,done:function(p){ V.ph[slot]=p; V.confirmMiss=false; V.confirmRule=false; render(); }}; var el=$(cam?'f-cam':'f-alb'); el.value=''; el.click(); }
 function rmPhoto(slot){ var p=V.ph[slot]; delete V.ph[slot]; if(p&&!p.dataUrl&&V.editId){ V.phDel=V.phDel||{}; V.phDel[slot]=1; } render(); }
 function perHint(){ var f=V.f; if(!f.start||!f.end) return ''; if(f.end<f.start) return '<div class="msg err" style="display:block;margin-top:8px">종료일이 시작일보다 빨라요.</div>'; return overlaps(f.start,f.end,MONTH)?'<div class="msg ok" style="display:block;margin-top:8px;padding:8px 12px;font-size:14px">✓ '+mLabel(MONTH)+'에 걸친 전단 — 등록 가능</div>':'<div class="msg err" style="display:block;margin-top:8px;padding:8px 12px;font-size:14px">✕ '+mLabel(MONTH)+'에 걸치지 않은 전단이에요. 행사월을 확인해 주세요.</div>'; }
 function drawPerHint(){ syncForm(); var e=$('per-hint'); if(e) e.innerHTML=perHint(); }
@@ -373,10 +376,10 @@ function syncForm(){
   if((v=g('r-note'))!==undefined) f.note=v.trim();
 }
 function bindReg(){
-  ['r-agency','r-store','r-price','r-ipsu','r-start','r-end','r-comp','r-note','r-salesNone','r-salesNormal','r-salesFlyer'].forEach(function(id){ var e=$(id); if(e) e.addEventListener('change',syncForm); });
+  ['r-agency','r-store','r-price','r-ipsu','r-start','r-end','r-comp','r-note','r-salesNone','r-salesNormal','r-salesFlyer'].forEach(function(id){ var e=$(id); if(e) e.addEventListener('change',function(){ syncForm(); V.confirmRule=false; }); });
   var pr=$('r-product'); if(pr) pr.onchange=function(){ syncForm(); if(V.f.product&&!V.f._custom){ V.f.ipsu=ipsuOf(V.f.product); } render(); };
   if(pr&&V.f._custom) pr.oninput=function(){ V.f.product=pr.value; var i=ipsuOf(pr.value); if(i&&$('r-ipsu')) $('r-ipsu').value=i; };
-  var p=$('r-price'); if(p) p.onblur=function(){ var n=num(p.value); p.value=won(n); V.f.price=n; };
+  var p=$('r-price'); if(p) p.onblur=function(){ var n=num(p.value); p.value=won(n); V.f.price=n; syncForm(); var pi=priceIssue(n,V.f.ipsu||ipsuOf(V.f.product)); if(pi) showMsg('⛔ '+esc(pi)); };
   var s=$('r-start'); if(s) s.onchange=function(){ syncForm(); if(V.f.start&&!V.f.end){ V.f.end=addDays(V.f.start,6); $('r-end').value=V.f.end; } drawPerHint(); };
   var en=$('r-end'); if(en) en.addEventListener('change',drawPerHint);
   var st=$('r-store'); if(st){ st.oninput=function(){ V.f.store=st.value; drawAc(); }; st.onfocus=drawAc; }
@@ -414,6 +417,8 @@ function submitReg(){
   if(miss.length){ showMsg('<b>'+miss.join(', ')+'</b>을(를) 넣어 주세요.'); return; }
   if(f.end<f.start){ showMsg('종료일이 시작일보다 빨라요.'); return; }
   if(!overlaps(f.start,f.end,MONTH)){ showMsg('<b>'+mLabel(MONTH)+' PM</b>은 '+mLabel(MONTH)+'에 하루라도 걸친 전단만 등록할 수 있어요 (예: '+mHint(MONTH)+').<br>입력한 기간: '+md(f.start)+' ~ '+md(f.end)+' — 위에서 행사월을 바꾸거나 기간을 확인해 주세요.'); return; }
+  var iss=ruleIssues(f.price,f.ipsu||ipsuOf(f.product),f.start,V.ph);
+  if(iss.length&&!V.confirmRule){ V.confirmRule=true; showMsg('⛔ 이대로 등록하면 <b>부적합</b>이 될 수 있어요:<br>• '+iss.join('<br>• ')+'<br>고친 뒤 등록하거나, 그래도 등록하려면 <b>등록하기</b>를 한 번 더 눌러 주세요.'); return; }
   var noPh=SLOTS.filter(function(s){ return s.must&&!V.ph[s.k]; }).map(function(s){ return s.l; });
   if(noPh.length&&!V.confirmMiss){ V.confirmMiss=true; showMsg('📷 <b>'+noPh.join(', ')+'</b> 사진이 없어요. 사진이 없으면 PM 인정이 어려워요.<br>나중에 추가하려면 <b>등록하기</b>를 한 번 더 눌러 주세요.','warn'); return; }
   var prod=f.product+(+f.extra?' 외 '+f.extra+'종':'');
@@ -429,12 +434,18 @@ function submitReg(){
   var ags=ls('fp_ags_'+ME.office,[]); if(ags.indexOf(f.agency)<0){ ags.unshift(f.agency); lss('fp_ags_'+ME.office,ags.slice(0,40)); }
   lss('fp_last',{agency:f.agency});
   var wasEdit=!!V.editId;
-  V.f=blankForm(); V.ph={}; V.phDel={}; V.editId=null; V.confirmMiss=false;
+  V.f=blankForm(); V.ph={}; V.phDel={}; V.editId=null; V.confirmMiss=false; V.confirmRule=false;
   render(); window.scrollTo(0,0);
   showMsg('✅ <b>'+esc(row.store)+'</b> '+(wasEdit?'수정 내용을 보냈어요.':'접수했어요. 보내는 동안 다음 점포를 등록하셔도 됩니다.'),'ok');
 }
+function ruleIssues(price,ip,start,ph){
+  var out=[], pi=priceIssue(price,ip); if(pi) out.push(pi);
+  var ev=ph&&ph.event, dt=ev&&(ev.exifDate||ev.exif||''); if(dt&&start&&dt.slice(0,10)<start) out.push('행사사진 촬영일('+dt.slice(0,10)+')이 행사 시작일('+start+')보다 빨라요');
+  SLOTS.forEach(function(s){ var p=ph&&ph[s.k]; if(!p) return; if(p.ai) out.push(s.l+': AI로 만든 이미지 표시('+p.ai+')'); else if(p.ed) out.push(s.l+': 편집 앱 흔적('+p.ed+')'); });
+  return out;
+}
 function upsertRow(r){ if(!V.rows) V.rows=[]; var i=V.rows.map(function(x){ return x.id; }).indexOf(r.id); if(i>=0) V.rows[i]=r; else V.rows.push(r); if(!sheetDirty().length) V.sheet=null; }
-function photoPayload(p){ return {imageData:p.dataUrl,sha:p.sha,dhash:p.dhash,exifDate:p.exifDate,lastModified:p.lastModified,origW:p.origW,origH:p.origH,origSize:p.origSize}; }
+function photoPayload(p){ return {imageData:p.dataUrl,sha:p.sha,dhash:p.dhash,exifDate:p.exifDate,lastModified:p.lastModified,origW:p.origW,origH:p.origH,origSize:p.origSize,make:p.make,model:p.model,software:p.sw,ai:p.ai,ed:p.ed,sc:1}; }
 function editRow(id){
   var r=(V.rows||[]).filter(function(x){ return x.id===id; })[0]; if(!r) return;
   var m=String(r.product||'').match(/^(.*) 외 (\d+)종$/), base=m?m[1]:r.product;
@@ -466,6 +477,29 @@ function readExifDate(buf){
   }catch(e){}
   return '';
 }
+// 카메라·편집 앱·AI 생성 표시 — 원본 파일 바이트에서 찾음 (사진을 줄이면 이 정보가 사라지므로 먼저 읽음)
+function readMeta(buf){
+  var m={make:'',model:'',sw:'',ai:'',ed:''};
+  try{
+    var v=new DataView(buf);
+    if(v.getUint16(0)===0xFFD8){ var o=2, L=Math.min(v.byteLength,262144);
+      while(o<L-4){ var mk=v.getUint16(o), sz=v.getUint16(o+2);
+        if(mk===0xFFE1&&v.getUint32(o+4)===0x45786966){ var t=o+10, le=v.getUint16(t)===0x4949, g16=function(p){ return v.getUint16(p,le); }, g32=function(p){ return v.getUint32(p,le); };
+          var str=function(p,n){ var s=''; for(var i=0;i<n-1&&i<120;i++){ var c=v.getUint8(p+i); if(!c) break; s+=String.fromCharCode(c); } return s; };
+          var n=g16(t+g32(t+4)), b0=t+g32(t+4)+2;
+          for(var i=0;i<n;i++){ var e=b0+i*12, tg=g16(e), cnt=g32(e+4), off=cnt>4?t+g32(e+8):e+8; if(tg===0x010F) m.make=str(off,cnt).trim(); if(tg===0x0110) m.model=str(off,cnt).trim(); if(tg===0x0131) m.sw=str(off,cnt).trim(); }
+          break; }
+        if((mk&0xFF00)!==0xFF00) break; o+=2+sz; } }
+    var u=new Uint8Array(buf), head=u.subarray(0,Math.min(u.length,1048576)), tail=u.length>1048576?u.subarray(u.length-131072):new Uint8Array(0), txt='';
+    var dec=window.TextDecoder?new TextDecoder('latin1'):null; txt=dec?dec.decode(head)+dec.decode(tail):'';
+    var AI=[[/trainedAlgorithmicMedia/,'AI 생성(IPTC)'],[/compositeWithTrainedAlgorithmicMedia/,'AI 합성(IPTC)'],[/OpenAI|DALL[\s·\-]?E|ChatGPT/i,'OpenAI'],[/Midjourney/i,'Midjourney'],[/Stable ?Diffusion|Steps: \d+, Sampler/i,'Stable Diffusion'],[/Adobe Firefly|Firefly/,'Adobe Firefly'],[/Google (Gemini|Imagen)|SynthID|Imagen/,'Google AI'],[/NovelAI|Leonardo\.Ai|Ideogram|Flux\.?1|Bing Image Creator|Copilot Designer/i,'AI 이미지 생성기'],[/Generative (AI|edit|fill)|AI[- ]generated|생성형 AI|Galaxy AI/i,'생성형 AI 편집']];
+    for(var k=0;k<AI.length;k++) if(AI[k][0].test(txt)){ m.ai=AI[k][1]; break; }
+    if(!m.ai&&/c2pa|jumbf/i.test(txt)) m.ai='';   // C2PA만 있으면 카메라일 수도 있어 표시 안 함
+    var ED=/(Photoshop|Lightroom|Snapseed|PicsArt|Meitu|Canva|SNOW|B612|Foodie|Ulike|VSCO|Pixlr|GIMP|PhotoScape|Polarr|Facetune|Remini|Picsart|PhotoDirector|Fotor|미리캔버스)/i;
+    var em=(m.sw.match(ED)||txt.match(/CreatorTool[^<"]{0,4}["> ]?([^<"]{0,60})/)||[])[1]||''; if(em&&ED.test(em)) m.ed=(em.match(ED)||[em])[0];
+  }catch(e){}
+  return m;
+}
 function hex(buf){ return Array.prototype.map.call(new Uint8Array(buf),function(b){ return ('0'+b.toString(16)).slice(-2); }).join(''); }
 function dhash(img){
   var c=document.createElement('canvas'); c.width=9; c.height=8; var x=c.getContext('2d');
@@ -488,14 +522,16 @@ function quality(img){
 function prepFile(f,cb){
   var fr=new FileReader();
   fr.onload=function(){
-    var buf=fr.result, exif=readExifDate(buf);
+    var buf=fr.result, exif=readExifDate(buf), meta=readMeta(buf);
     var shaP=(window.crypto&&crypto.subtle)?crypto.subtle.digest('SHA-256',buf).then(hex):Promise.resolve('');
     var url=URL.createObjectURL(f), img=new Image();
     img.onload=function(){
       var W=img.naturalWidth, H=img.naturalHeight, M=DEMO?900:1800, s=Math.min(1,M/Math.max(W,H));
       var c=document.createElement('canvas'); c.width=Math.round(W*s); c.height=Math.round(H*s);
       c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-      var p={dataUrl:c.toDataURL('image/jpeg',DEMO?.6:.82),dhash:dhash(img),exifDate:exif,lastModified:f.lastModified?new Date(f.lastModified).toISOString():'',origW:W,origH:H,origSize:f.size,warn:quality(img)};
+      var p={dataUrl:c.toDataURL('image/jpeg',DEMO?.6:.82),dhash:dhash(img),exifDate:exif,lastModified:f.lastModified?new Date(f.lastModified).toISOString():'',origW:W,origH:H,origSize:f.size,warn:quality(img),make:meta.make,model:meta.model,sw:meta.sw,ai:meta.ai,ed:meta.ed,sc:1};
+      if(meta.ai) p.warn='⛔ AI로 만든 이미지로 보여요('+meta.ai+') — 부적합'+(p.warn?' · '+p.warn:'');
+      else if(meta.ed) p.warn='편집 앱 흔적('+meta.ed+') — 지난 사진을 편집해 쓰면 부적합'+(p.warn?' · '+p.warn:'');
       if(exif){ var em=exif.slice(0,7); if(em<ym(-1)&&em<MONTH) p.warn=(p.warn?p.warn+' · ':'')+'촬영일 '+exif.slice(0,10)+' — 지난 사진 같아요'; }
       URL.revokeObjectURL(url);
       shaP.then(function(sha){ p.sha=sha; cb(p); });
@@ -653,7 +689,7 @@ function bindSheet(){
     var el=e.target, i=el.getAttribute('data-r'), k=el.getAttribute('data-k'); if(i==null) return;
     var r=V.sheet[+i], c=SC.filter(function(x){ return x.k===k; })[0], v=el.value;
     if(c.t==='num') v=num(v); else if(c.t==='date') v=normDate(v,MONTH); else v=v.trim();
-    r[k]=v; r.dirty=true; r.bad=false;
+    r[k]=v; r.dirty=true; r.bad=false; V.sheetConfirm=false;
     if(k==='product'&&!r.ipsu) r.ipsu=ipsuOf(v);
     if(k==='start'&&v&&!r.end) r.end=addDays(v,6);
     if(i==V.sheet.length-1) V.sheet.push(blankSRow());
@@ -694,6 +730,9 @@ function sheetSave(){
     else if(r.end<r.start||!overlaps(r.start,r.end,MONTH)){ r.bad=true; per.push(V.sheet.indexOf(r)+1); } });
   if(per.length&&!bad.length){ drawSheetBody(); showMsg('빨간 번호 행은 '+mLabel(MONTH)+'에 걸치지 않은 기간이에요 ('+mLabel(MONTH)+' PM은 '+mLabel(MONTH)+'에 하루라도 걸친 전단만): '+per.slice(0,10).join(', ')+'행'); return; }
   if(bad.length){ drawSheetBody(); showMsg('빨간 번호 행에 필수 칸(대리점명·점포명·행사가격·기간·품목명)이 비었어요: '+bad.slice(0,10).join(', ')+'행'); return; }
+  var ri=[]; sheetDirty().forEach(function(r){ var ph={}; SLOTS.forEach(function(s){ var p=r.nph[s.k]||r.photos[s.k]; if(p) ph[s.k]=p; }); var is=ruleIssues(r.price,r.ipsu||ipsuOf(r.product),r.start,ph); if(is.length) ri.push((V.sheet.indexOf(r)+1)+'행: '+is.join(' / ')); });
+  if(ri.length&&!V.sheetConfirm){ V.sheetConfirm=true; showMsg('⛔ 부적합이 될 수 있는 행이 있어요:<br>• '+ri.slice(0,10).map(esc).join('<br>• ')+'<br>그래도 저장하려면 <b>저장</b>을 한 번 더 눌러 주세요.'); return; }
+  V.sheetConfirm=false;
   var n=0;
   sheetDirty().forEach(function(r){
     var row={id:r.id||'',month:MONTH,office:ME.office,submitter:ME.name,device:DEV}; SC.forEach(function(c){ row[c.k]=r[c.k]; });
